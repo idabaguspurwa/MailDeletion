@@ -8,6 +8,7 @@ This mail deletion automation project was developed as part of the technical tes
 
 ## Setup
 1. Clone the repository
-2. Add test.properties to `src/test/resources/test.properties`
-3. Edit `test.properties` with your test account credentials
-4. Run the tests using your preferred IDE or Maven
+2. Copy `src/test/resources/test.properties.template` to `src/test/resources/test.properties`
+3. Edit `test.properties` with your email credentials
+4. Run the tests using mvn clean install
+
