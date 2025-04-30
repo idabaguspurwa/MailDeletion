@@ -1,0 +1,10 @@
+src/test/resources/test.properties
+
+.idea/
+*.iml
+.vscode/
+
+target/
+*.class
+
+*.log 
