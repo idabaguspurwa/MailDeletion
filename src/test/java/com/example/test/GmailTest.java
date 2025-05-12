@@ -102,62 +102,54 @@ public class GmailTest {
     private void login() throws InterruptedException {
         logger.info("Starting login process...");
         
-        driver.get("https://gmail.com");
+        // Use direct Google Accounts URL instead of Gmail
+        driver.get("https://accounts.google.com/signin/v2/identifier?service=mail");
         Thread.sleep(2000);
         
-        try {
-            WebElement signInButton = wait.until(ExpectedConditions.elementToBeClickable(
-                By.cssSelector("a[data-action='sign in'], .button-primary")));
-            ((org.openqa.selenium.JavascriptExecutor) driver).executeScript("arguments[0].click();", signInButton);
-            Thread.sleep(2000);
-        } catch (Exception e) {
-            logger.info("No initial sign-in button found, proceeding with login");
-        }
+        boolean loginCompleted = false;
+        int loginAttempts = 0;
+        int maxLoginAttempts = 3;
         
-        logger.info("Entering email address...");
-        WebElement emailInput = wait.until(ExpectedConditions.elementToBeClickable(
-            By.cssSelector("#identifierId, input[type='email']")));
-        typeSlowly(emailInput, testEmail);
-        Thread.sleep(1000);
-        
-        logger.info("Clicking next after inputting email...");
-        WebElement nextButton = wait.until(ExpectedConditions.elementToBeClickable(
-            By.cssSelector("#identifierNext button, button[type='submit']")));
-        ((org.openqa.selenium.JavascriptExecutor) driver).executeScript("arguments[0].click();", nextButton);
-        Thread.sleep(3000);
-        
-        logger.info("Waiting for password field...");
-        WebDriverWait passwordWait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        WebElement passwordInput = passwordWait.until(ExpectedConditions.elementToBeClickable(
-            By.cssSelector("input[type='password']")));
-        
-        logger.info("Entering password...");
-        typeSlowly(passwordInput, testPassword);
-        Thread.sleep(1000);
-        
-        logger.info("Clicking next after inputting password...");
-        WebElement passwordNextButton = passwordWait.until(ExpectedConditions.elementToBeClickable(
-            By.cssSelector("#passwordNext button, button[type='submit']")));
-        ((org.openqa.selenium.JavascriptExecutor) driver).executeScript("arguments[0].click();", passwordNextButton);
-        Thread.sleep(5000);
-        
-        logger.info("Handling post-login navigation...");
-        int maxAttempts = 3;
-        int attempt = 0;
-        boolean inboxLoaded = false;
-        
-        while (!inboxLoaded && attempt < maxAttempts) {
-            attempt++;
-            logger.info("Attempt {} to reach inbox", attempt);
+        while (!loginCompleted && loginAttempts < maxLoginAttempts) {
+            loginAttempts++;
+            logger.info("Login attempt {}", loginAttempts);
             
             try {
+                // Check if we're on the email input page
+                WebElement emailInput = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("#identifierId, input[type='email']")));
+                typeSlowly(emailInput, testEmail);
+                Thread.sleep(1000);
+                
+                WebElement nextButton = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("#identifierNext button, button[type='submit']")));
+                ((org.openqa.selenium.JavascriptExecutor) driver).executeScript("arguments[0].click();", nextButton);
+                Thread.sleep(3000);
+                
+                // Wait for and enter password
+                WebElement passwordInput = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("input[type='password']")));
+                typeSlowly(passwordInput, testPassword);
+                Thread.sleep(1000);
+                
+                WebElement passwordNextButton = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("#passwordNext button, button[type='submit']")));
+                ((org.openqa.selenium.JavascriptExecutor) driver).executeScript("arguments[0].click();", passwordNextButton);
+                Thread.sleep(5000);
+                
+                // Try to access inbox directly
                 driver.get("https://mail.google.com/mail/u/0/#inbox");
                 Thread.sleep(5000);
                 
+                // Check if we landed on workspace page
                 if (driver.getCurrentUrl().contains("workspace.google.com")) {
-                    logger.info("Detected workspace landing page, attempting to bypass...");
+                    logger.info("Detected workspace landing page, attempting direct Gmail access...");
+                    // Try accessing Gmail directly with a different URL
+                    driver.get("https://mail.google.com/mail/u/0");
+                    Thread.sleep(3000);
                     
-                    try {
+                    // If still on workspace, try finding and clicking Gmail-related buttons
+                    if (driver.getCurrentUrl().contains("workspace.google.com")) {
                         List<WebElement> possibleButtons = driver.findElements(
                             By.cssSelector("a[href*='mail.google.com'], a[data-action='sign in'], .button-primary"));
                         
@@ -177,30 +169,32 @@ public class GmailTest {
                                 continue;
                             }
                         }
-                    } catch (Exception e) {
-                        logger.info("Could not find Gmail-related buttons, trying direct navigation");
                     }
-                    
-                    driver.get("https://gmail.com/mail");
-                    Thread.sleep(5000);
                 }
                 
+                // Verify we're actually in Gmail
                 wait.until(ExpectedConditions.or(
                     ExpectedConditions.presenceOfElementLocated(By.cssSelector("div[role='main']")),
                     ExpectedConditions.presenceOfElementLocated(By.cssSelector(".aeH")),
                     ExpectedConditions.presenceOfElementLocated(By.cssSelector(".ain"))
                 ));
                 
-                inboxLoaded = true;
-                logger.info("Successfully loaded inbox");
+                loginCompleted = true;
+                logger.info("Successfully logged in and accessed inbox");
                 
             } catch (Exception e) {
-                logger.warn("Attempt {} failed: {}", attempt, e.getMessage());
-                if (attempt >= maxAttempts) {
-                    throw new RuntimeException("Failed to load inbox after " + maxAttempts + " attempts", e);
+                logger.warn("Login attempt {} failed: {}", loginAttempts, e.getMessage());
+                if (loginAttempts >= maxLoginAttempts) {
+                    throw new RuntimeException("Failed to complete login after " + maxLoginAttempts + " attempts", e);
                 }
+                // Start over from the beginning
+                driver.get("https://accounts.google.com/signin/v2/identifier?service=mail");
                 Thread.sleep(3000);
             }
+        }
+        
+        if (!loginCompleted) {
+            throw new RuntimeException("Failed to complete login process");
         }
         
         logger.info("Login process completed");
@@ -247,7 +241,7 @@ public class GmailTest {
                     wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector(".AO")));
                     
                     inboxLoaded = true;
-                    logger.info("Successfully loaded inbox after handling prompts");
+                    logger.info("Successfully loaded to inbox after handling prompts");
                 } catch (Exception e) {
                     logger.warn("Attempt {} to load inbox failed, retrying...", attempt);
                     if (attempt < maxAttempts) {
@@ -288,7 +282,7 @@ public class GmailTest {
                         noEmailsFoundCount++;
                         if (noEmailsFoundCount >= maxRetries) {
                             if (processedCount > 0) {
-                                logger.info("All unread emails have been processed. Total deleted: {}", processedCount);
+                                logger.info("All unread emails have been deleted. Total deleted: {}", processedCount);
                                 return true;
                             } else {
                                 logger.info("No unread emails found in inbox");
